@@ -220,7 +220,8 @@ void visualization(int n, Robot robot, int step, Robot p[], Robot pr[])
     plt::plot({ robot.x }, { robot.y }, "bo");
 
     //Save the image and close the plot
-    plt::save("./Images/Step" + to_string(step) + ".png");
+    plt::show();
+    // plt::save("./Images/Step" + to_string(step) + ".png");
     plt::clf();
 }
 
@@ -295,7 +296,8 @@ int main()
 
         //####   DON'T MODIFY ANYTHING ABOVE HERE! ENTER CODE BELOW ####
 
-        //TODO: Graph the position of the robot and the particles at each step
+        //Graph the position of the robot and the particles at each step
+        // visualization(n, myrobot, t, p2, p3);
 
     } //End of Steps loop
 

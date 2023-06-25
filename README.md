@@ -28,5 +28,8 @@ Wait for the program to iterate `50` times.
 ### Generated Images
 After running the program, `50` images will be generated in the `Images` folder.
 
+### Visualization
+Cancel the comment in `main.cpp` line 300.
+
 ### Datas
 All test data in the `dataset` folder.
