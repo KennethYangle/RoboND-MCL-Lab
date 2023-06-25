@@ -1,5 +1,5 @@
 //Compile with: g++ solution.cpp -o app -std=c++11 -I/usr/include/python2.7 -lpython2.7
-#include "src/matplotlibcpp.h" //Graph Library
+#include "matplotlibcpp.h" //Graph Library
 #include <iostream>
 #include <string>
 #include <math.h>
@@ -295,7 +295,8 @@ int main()
 
         //####   DON'T MODIFY ANYTHING ABOVE HERE! ENTER CODE BELOW ####
 
-        //TODO: Graph the position of the robot and the particles at each step
+        //Graph the position of the robot and the particles at each step
+        visualization(n, myrobot, t, p2, p3);
 
     } //End of Steps loop
 

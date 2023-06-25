@@ -1,0 +1,10 @@
+<launch>
+  <!-- <node name="ekf_node" pkg="ekf_pkg" type="ekf_node" output="screen"/> -->
+  <node name="ekf_node" pkg="ekf_pkg" type="ekf_node"/>
+  <!-- <node pkg="rosbag" type="play" name="bag_play" args="$(find offboard_pkg)/bag/2021-04-06-21-23-04.bag"/> -->
+  <node pkg="rosbag" type="play" name="bag_play" args="/mnt/hgfs/杨坤_BY2103058/无人机所/闫村实验230504/0504success/14.50circle/fly_high_2023-04-28-11-21-08.bag -s 285 --duration=15"/>
+  <!-- <node pkg="rosbag" type="play" name="bag_play" args="/mnt/hgfs/杨坤_BY2103058/无人机所/闫村实验230504/0504success/15.14flyballoon/fly_high_2023-04-28-11-21-08.bag -s 88 --duration=8"/> -->
+  <!-- <node pkg="rosbag" type="play" name="bag_play" args="/home/wsh/database/EKF_test.bag"/> -->
+  <!-- <node pkg="rosbag" type="play" name="bag_play" args="/home/wsh/database/data_170_raw_200.bag"/> -->
+  <!-- <node pkg="rosbag" type="play" name="bag_play" args="/home/wsh/database/data_100_raw_100.bag"/> -->
+</launch>
