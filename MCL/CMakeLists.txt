@@ -135,10 +135,6 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/pose_eskf.cpp
 # )
-# add_library(ekf_pkg src/eskf.cpp src/eskf.h src/img_imu_ekf.cpp src/img_imu_ekf.h)
-# link_libraries(ekf_pkg)
-add_library(MCL src/main.cpp include/matplotlibcpp.h)
-link_libraries(MCL)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -150,8 +146,7 @@ link_libraries(MCL)
 ## The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/pose_eskf_node.cpp)
 
-# add_executable(ekf_node src/img_imu_ekf_node.cpp src/img_imu_ekf.cpp src/eskf.cpp src/math_utils.cpp)
-add_executable(mcl_node src/main.cpp)
+add_executable(mcl_node src/mcl_filter.cpp)
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
