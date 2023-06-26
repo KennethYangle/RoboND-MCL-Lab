@@ -341,7 +341,7 @@ int main(int argc, char **argv)
     ros::Subscriber img_sub = ekf_img.subscribe<std_msgs::Float32MultiArray>
                 ("tracker/pos_image", 10, mav_img_cb);          //23hz
     ros::Subscriber img_show_sub = ekf_img.subscribe<sensor_msgs::CompressedImage>
-                ("/camera/left/compressed", 10, img_show_cb); //21hz
+                ("/image_raw/compressed", 10, img_show_cb); //21hz
     ros::Subscriber ekf_state_sub = ekf_img.subscribe<std_msgs::UInt64>
                 ("ekf/state", 1, ekf_state_cb); //21hz
 
