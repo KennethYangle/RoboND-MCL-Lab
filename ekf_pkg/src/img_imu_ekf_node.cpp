@@ -50,11 +50,11 @@ Vector3d acc;
 Vector3d gyro;
 Vector2d mav_img_pre;
 Vector2d mav_img;
-Vector2d img0(360,202.5);//图像分别率
-int img_f = 360;
+Vector2d img0(640, 360);//图像分别率
+int img_f = 370;
 Vector3d mav_vel;
 Vector3d mav_pos;
-Vector3d target_pos(-5,15,1);
+Vector3d target_pos(8, -35, 12);
 Vector4d mav_q;
 Vector4d mav_qq;
 
@@ -100,10 +100,10 @@ void loop_img(int loop)
     cout << "cnt:" << cnt << endl;
     cout << "img_cnt:" << img_cnt << endl;
     cout << "Loop circle:" << loop << endl;
-    cout << "PP[cnt]:" << PP[cnt] << endl;
-    cout << "ZZ[img_cnt]:" << ZZ[img_cnt] << endl;
-    cout << "Phi[cnt]:" << Phi[cnt] << endl;
-    cout << "GG[cnt]:" << GG[cnt] << endl;
+    // cout << "PP[cnt]:" << PP[cnt] << endl;
+    // cout << "ZZ[img_cnt]:" << ZZ[img_cnt] << endl;
+    // cout << "Phi[cnt]:" << Phi[cnt] << endl;
+    // cout << "GG[cnt]:" << GG[cnt] << endl;
 
     if(loop == 0)
     {
@@ -116,7 +116,7 @@ void loop_img(int loop)
     {
         cout << "loop_img step2 is success!!!!" << endl;
         img_imu.kf.predict(Phi[cnt], img_imu.kf.x, img_imu.kf.P, GG[cnt], img_imu.Q);
-        cout << "state loop2:" << img_imu.kf.x << endl;
+        // cout << "state loop2:" << img_imu.kf.x << endl;
         if(loop == loop_cnt - 1)
         {
             PP[img_cnt] = img_imu.kf.P;
@@ -158,9 +158,6 @@ void mav_imu_cb(const sensor_msgs::Imu::ConstPtr &msg)
     {
         get_sensor = true;
     }
-    cout << "Imu is subcribing!!!!!" << endl;
-    cout << "get_sensor：" << get_sensor << endl;
-    // cout << "is_img_come state:" << is_img_come << endl;
     Matrix3d I3 = Matrix3d::Identity(); //定义单位矩阵
 
     // imu_ref_time = msg->header.stamp.toSec();
@@ -193,8 +190,7 @@ void mav_imu_cb(const sensor_msgs::Imu::ConstPtr &msg)
     if (img_imu.is_init_done == false && get_sensor == true)
     {
         //初始化的时候应该更新状态X:img_imu.kf.x
-        img_imu.sensor_init(mav_q, Vector3d(1,5,0), mav_vel, mav_img);
-        // img_imu.sensor_init(mav_q, mav_pos - target_pos, mav_vel, mav_img);
+        img_imu.sensor_init(mav_q, mav_pos - target_pos, mav_vel, mav_img);
         //初始化的时候应该更新下Phi:img_imu.Phi
         img_imu.update_Phi(gyro, mav_vel, acc, imu_ref_time - imu_pre_time);
         is_img_come = false;//防止未初始化时，Img先于Imu来临。
@@ -229,20 +225,17 @@ void mav_imu_cb(const sensor_msgs::Imu::ConstPtr &msg)
             // PP[img_cnt] = img_imu.kf.P;
             ZZ[img_cnt] = VectorXd::Ones(2);
             ZZ[img_cnt].segment(0, 2) = mav_img;
-            cout << "IMG_x:" << mav_img_pre(0) * img_f + img0(0) << endl;
-            cout << "IMG_y:" << mav_img_pre(1) * img_f + img0(1) << endl;
-            cout << "IMG_x:" << mav_img(0) * img_f + img0(0) << endl;
-            cout << "IMG_y:" << mav_img(1) * img_f + img0(1) << endl;
+            // cout << "IMG_x:" << mav_img_pre(0) * img_f + img0(0) << endl;
+            // cout << "IMG_y:" << mav_img_pre(1) * img_f + img0(1) << endl;
+            // cout << "IMG_x:" << mav_img(0) * img_f + img0(0) << endl;
+            // cout << "IMG_y:" << mav_img(1) * img_f + img0(1) << endl;
             for (int circle = 0; circle < loop_cnt; circle++)
             {
                 cout << "Enter circle!!!!:" << endl;
                 loop_img(circle);
                 cout << "Out circle!!!!:" << endl;
             }
-            cout << "update_x:" << img_imu.kf.x(10) * img_f + img0(0) << endl;
-            cout << "update_y:" << img_imu.kf.x(11) * img_f + img0(1) << endl;
             is_img_come = false;
-            cout << "Img has been dealing!" << endl;
         }
         else
         {
@@ -270,12 +263,13 @@ void mav_imu_cb(const sensor_msgs::Imu::ConstPtr &msg)
         img_predict.data.push_back(img_imu.kf.x(11) * img_f + img0(1));
         // img_predict.width = img_imu.kf.x(10) * img_f + img0(0);
         // img_predict.height = img_imu.kf.x(11) * img_f + img0(1);
-        cout << "state loop1:" << img_imu.kf.x << endl;
+        // cout << "state loop1:" << img_imu.kf.x << endl;
 
         cout << "img_x:" << mav_img(0) * img_f + img0(0) << endl;
         cout << "img_y:" << mav_img(1) * img_f + img0(1) << endl;
         cout << "ekf_x:" << img_imu.kf.x(10) * img_f + img0(0) << endl;
         cout << "ekf_y:" << img_imu.kf.x(11) * img_f + img0(1) << endl;
+        cout << "img_imu.kf.x:" << img_imu.kf.x << endl;
         pub_img_pos.publish(img_predict);
     }
     
