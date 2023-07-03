@@ -7,8 +7,9 @@
 #include <deque>
 
 #include "img_imu_ekf.h"
-#include <algorithm>
+#include "mcl_filter.h"
 
+#include <algorithm>
 #include <std_msgs/Float32MultiArray.h>
 #include <std_msgs/UInt64.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -54,15 +55,21 @@ Vector2d img0(640, 360);//图像分别率
 int img_f = 370;
 Vector3d mav_vel;
 Vector3d mav_pos;
+Vector3d mav_pos_prev;
 Vector3d target_pos(8, -35, 12);
 Vector4d mav_q;
 Vector4d mav_qq;
+double mav_yaw;
+double mav_yaw_prev;
+ros::Time timestamp_begin;
+ros::Time timestamp;
+ros::Time timestamp_prev;
 
 int loop_cnt = 2;
 int img_cnt = 0;
 bool is_img_come = false;
 bool get_img = false;
-bool get_orientation = false;
+bool get_pose = false;
 bool get_vel = false;
 bool get_sensor = false;
 
@@ -73,6 +80,11 @@ Vector3d ACC[50];
 MatrixXd PP[50]; //有Img后，第一次使用的P
 MatrixXd KK;
 // MatrixXd GG;
+
+
+// Create a set of particles
+const int n = 100;
+Robot p[n];
 
 ros::Publisher pub_img_pos;
 
@@ -93,56 +105,78 @@ void loop_img(int loop)
     cnt = img_cnt - loop_cnt + loop + 1;
     if (cnt < 0)
     {
-        cout << "lalallal:" << cnt << endl;
         cnt += 50;
-        cout << "lalallal:" << cnt << endl;
     }
-    cout << "cnt:" << cnt << endl;
-    cout << "img_cnt:" << img_cnt << endl;
-    cout << "Loop circle:" << loop << endl;
-    // cout << "PP[cnt]:" << PP[cnt] << endl;
-    // cout << "ZZ[img_cnt]:" << ZZ[img_cnt] << endl;
-    // cout << "Phi[cnt]:" << Phi[cnt] << endl;
-    // cout << "GG[cnt]:" << GG[cnt] << endl;
 
     if(loop == 0)
     {
         KK = PP[cnt] * img_imu.kf.H.transpose() * (img_imu.kf.H * PP[cnt] * img_imu.kf.H.transpose() + img_imu.R).inverse();
         img_imu.kf.update(PP[cnt], img_imu.kf.H, img_imu.Q, img_imu.kf.x, KK, ZZ[img_cnt]); //状态观测为图像来临时的观测
         // PP[img_cnt] = img_imu.kf.P;
-        cout << "loop step1 success!!!!" << endl;
     }
     else
     {
-        cout << "loop_img step2 is success!!!!" << endl;
         img_imu.kf.predict(Phi[cnt], img_imu.kf.x, img_imu.kf.P, GG[cnt], img_imu.Q);
-        // cout << "state loop2:" << img_imu.kf.x << endl;
         if(loop == loop_cnt - 1)
         {
             PP[img_cnt] = img_imu.kf.P;
-            cout << "PP img_cnt!!!!" << endl;
-            cout << "PP circle:" << loop << endl;
         }
     }
-    
 }
 
 
 void mav_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
 {
-    // cout << "Mav_pos is ok!" << endl;
-    pos_ref_time = msg->header.stamp.toSec();
     mav_pos(0) = msg->pose.position.x;
     mav_pos(1) = msg->pose.position.y;
     mav_pos(2) = msg->pose.position.z;
-    get_orientation = true;
-    cout << "mav_pos: " << mav_pos(0) << ", " << mav_pos(1) << ", " << mav_pos(2) << endl;
+    double q0 = msg->pose.orientation.w;
+    double q1 = msg->pose.orientation.x;
+    double q2 = msg->pose.orientation.y;
+    double q3 = msg->pose.orientation.z;
+    mav_yaw = std::atan2(2*(q0*q3 + q1*q2), 1-2*(q2*q2 + q3*q3));
+    timestamp = msg->header.stamp;
+
+    ROS_INFO_STREAM("timestamp: " << (timestamp - timestamp_begin).toSec());
+    ROS_INFO_STREAM("mav_pos: " << mav_pos);
+    if (!get_pose)
+    {
+      mav_pos_prev = mav_pos;
+      mav_yaw_prev = mav_yaw;
+      timestamp_prev = timestamp;
+      timestamp_begin = timestamp;
+
+      for (int i = 0; i < n; i++) {
+        p[i] = Robot(mav_pos(0)-target_pos(0), mav_pos(1)-target_pos(1), mav_pos(2)-target_pos(2), mav_yaw);
+        ROS_DEBUG_STREAM("particle[" << i << "]_init_pos: " << p[i].x << ", " << p[i].y << ", " << p[i].z);
+      }
+      get_pose = true;
+      return;
+    }
+    const float dt = (timestamp - timestamp_prev).toSec();
+    if (dt < 0.0 || dt > 5.0)
+    {
+      ROS_WARN("Detected time jump in odometry. Resetting.");
+      get_pose = false;
+      return;
+    }
+    else if (dt > 0.02)
+    {
+      // Simulate a robot motion for each of these particles
+      for (int i = 0; i < n; i++) {
+        p[i].set_odoms(mav_pos, mav_pos_prev, mav_yaw, mav_yaw_prev, dt);
+        p[i].sample_motion_model_simple();
+        ROS_DEBUG_STREAM("particle[" << i << "]_pos: " << p[i].x << ", " << p[i].y << ", " << p[i].z);
+      }
+      mav_pos_prev = mav_pos;
+      mav_yaw_prev = mav_yaw;
+      timestamp_prev = timestamp;
+    }
 }
 
 void mav_vel_cb(const geometry_msgs::TwistStamped::ConstPtr &msg)
 {
     get_vel = true;
-    // cout << "Mav_vel is ok!" << endl;
     vel_ref_time = msg->header.stamp.toSec();
     mav_vel(0) = msg->twist.linear.x;
     mav_vel(1) = msg->twist.linear.y;
@@ -152,15 +186,13 @@ void mav_vel_cb(const geometry_msgs::TwistStamped::ConstPtr &msg)
 void mav_imu_cb(const sensor_msgs::Imu::ConstPtr &msg)
 {
     img_cnt = (img_cnt + 1)%50;
-    cout << "img_cnt:" << img_cnt << endl;
 
-    if(get_img && get_orientation && get_vel)
+    if(get_img && get_pose && get_vel)
     {
         get_sensor = true;
     }
     Matrix3d I3 = Matrix3d::Identity(); //定义单位矩阵
 
-    // imu_ref_time = msg->header.stamp.toSec();
     imu_ref_time = ros::Time::now().toSec();
 
     if (time_flag == false)
@@ -169,11 +201,6 @@ void mav_imu_cb(const sensor_msgs::Imu::ConstPtr &msg)
         imu_pre_time = imu_ref_time;
         time_flag = true;
     }
-    cout << "last_time:" << last_time << endl;
-    cout << "imu_ref_time:" << imu_ref_time << endl;
-    cout << "imu_pre_time:" << imu_pre_time << endl;
-    cout << "time:" << imu_ref_time - last_time << endl;
-    cout << "dt:" << imu_ref_time - imu_pre_time << endl;
 
     acc(0) = msg->linear_acceleration.x;
     acc(1) = msg->linear_acceleration.y;
@@ -185,7 +212,6 @@ void mav_imu_cb(const sensor_msgs::Imu::ConstPtr &msg)
     mav_q(1) = msg->orientation.x;
     mav_q(2) = msg->orientation.y;
     mav_q(3) = msg->orientation.z;
-    cout << "mav_q" << mav_q << endl;
 
     if (img_imu.is_init_done == false && get_sensor == true)
     {
@@ -209,8 +235,6 @@ void mav_imu_cb(const sensor_msgs::Imu::ConstPtr &msg)
         cnt_flag == true;
     }
 
-    cout << "img_imu is init:" << img_imu.is_init_done << endl;
-    cout << "Step1!!!!:" << endl;
     if (img_imu.is_init_done == true && get_sensor == true)
     {
         //执行矫正过程
@@ -225,15 +249,9 @@ void mav_imu_cb(const sensor_msgs::Imu::ConstPtr &msg)
             // PP[img_cnt] = img_imu.kf.P;
             ZZ[img_cnt] = VectorXd::Ones(2);
             ZZ[img_cnt].segment(0, 2) = mav_img;
-            // cout << "IMG_x:" << mav_img_pre(0) * img_f + img0(0) << endl;
-            // cout << "IMG_y:" << mav_img_pre(1) * img_f + img0(1) << endl;
-            // cout << "IMG_x:" << mav_img(0) * img_f + img0(0) << endl;
-            // cout << "IMG_y:" << mav_img(1) * img_f + img0(1) << endl;
             for (int circle = 0; circle < loop_cnt; circle++)
             {
-                cout << "Enter circle!!!!:" << endl;
                 loop_img(circle);
-                cout << "Out circle!!!!:" << endl;
             }
             is_img_come = false;
         }
@@ -242,34 +260,20 @@ void mav_imu_cb(const sensor_msgs::Imu::ConstPtr &msg)
             // loop_cnt++;
             // img_imu.kf.predict(img_imu.Phi, img_imu.kf.x, img_imu.kf.P, img_imu.G, img_imu.Q);  Test
             //Phi是上一时刻获得的，因此要先进行预测步骤，在更新Phi，同时还需要保存本次更新的Phi
-            cout << "Predict is entering!!!!" << endl;
             img_imu.update_Phi(gyro, mav_vel, acc, imu_ref_time - imu_pre_time);
             // PP[img_cnt] = img_imu.kf.P;
             img_imu.kf.predict(img_imu.Phi, img_imu.kf.x, img_imu.kf.P, img_imu.G, img_imu.Q);
-            cout << "Pre_x:" << img_imu.kf.x(10) * img_f + img0(0) << endl;
-            cout << "Pre_y:" << img_imu.kf.x(11) * img_f + img0(1) << endl;
             //保存这一次的预测协方差阵P,当图像来临时，第一次预测更新用这个协方差阵进行计算
             // if(loop_cnt == 1)
             //     PP = img_imu.kf.P;
             PP[img_cnt] = img_imu.kf.P;
             Phi[img_cnt] = img_imu.Phi;
             GG[img_cnt] = img_imu.G;
-            cout << "Predict is success!!!!" << endl;
         }
-        // cout << "loop_cnt:" << loop_cnt << endl;
         imu_pre_time = imu_ref_time;
         std_msgs::Float32MultiArray img_predict;
         img_predict.data.push_back(img_imu.kf.x(10) * img_f + img0(0));
         img_predict.data.push_back(img_imu.kf.x(11) * img_f + img0(1));
-        // img_predict.width = img_imu.kf.x(10) * img_f + img0(0);
-        // img_predict.height = img_imu.kf.x(11) * img_f + img0(1);
-        // cout << "state loop1:" << img_imu.kf.x << endl;
-
-        cout << "img_x:" << mav_img(0) * img_f + img0(0) << endl;
-        cout << "img_y:" << mav_img(1) * img_f + img0(1) << endl;
-        cout << "ekf_x:" << img_imu.kf.x(10) * img_f + img0(0) << endl;
-        cout << "ekf_y:" << img_imu.kf.x(11) * img_f + img0(1) << endl;
-        cout << "img_imu.kf.x:" << img_imu.kf.x << endl;
         pub_img_pos.publish(img_predict);
     }
     
@@ -280,19 +284,12 @@ void mav_img_cb(const std_msgs::Float32MultiArray::ConstPtr &msg)
     mav_img_pre = mav_img;
     if (msg->data[0] < 0)
     {
-        cout << "IMG_x:" << msg->data[0] << endl;
-        cout << "IMG_y:" << msg->data[1] << endl;
         return;
     }
-    cout << "IMG is coming!!!!!" << endl;
     is_img_come = true;
-    // img_ref_time = msg->header.stamp.toSec();
     mav_img(0) = (msg->data[0] - img0(0)) / img_f;
     mav_img(1) = (msg->data[1] - img0(1)) / img_f;
     get_img = true;
-    // cout << "img_x:" << mav_img(0) * img_f + img0(0) << endl;
-    // cout << "img_y:" << mav_img(1) * img_f + img0(1) << endl;
-    // last_time = imu_ref_time;
 }
 
 void img_show_cb(const sensor_msgs::CompressedImage::ConstPtr &msg)
@@ -315,7 +312,6 @@ void ekf_state_cb(const std_msgs::UInt64::ConstPtr &msg)
     if (msg->data == 0)
     {
         img_imu.is_init_done = false;
-        cout << "img_imu is_init_done false" << endl;
     }
 }
 
