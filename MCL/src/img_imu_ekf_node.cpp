@@ -2,6 +2,7 @@
 #include <ros/ros.h>
 #include <ros/package.h>
 #include <ros/console.h>
+#include <tf/tf.h>
 
 #include <Eigen/Geometry>
 #include <deque>
@@ -13,7 +14,9 @@
 #include <std_msgs/Float32MultiArray.h>
 #include <std_msgs/UInt64.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/TwistStamped.h>
+#include <visualization_msgs/MarkerArray.h>
 #include <mavros_msgs/CommandBool.h>
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/State.h>
@@ -57,10 +60,13 @@ Vector3d mav_vel;
 Vector3d mav_pos;
 Vector3d mav_pos_prev;
 Vector3d target_pos(8, -35, 12);
+geometry_msgs::Quaternion mav_quad;
 Vector4d mav_q;
 Vector4d mav_qq;
 double mav_yaw;
 double mav_yaw_prev;
+double mav_roll;
+double mav_pitch;
 ros::Time timestamp_begin;
 ros::Time timestamp;
 ros::Time timestamp_prev;
@@ -86,8 +92,10 @@ MatrixXd KK;
 const int n = 100;
 Robot p[n];
 
-ros::Publisher pub_img_pos;
+ros::Publisher pub_img_pos, pub_particle, pub_target_marker;
 
+void publishParticles();
+void publishTargetMarkers();
 
 //predict(MatrixXd Phi, MatrixXd X, MatrixXd P, MatrixXd G, MatrixXd Q)
 //void update(MatrixXd P, MatrixXd H, MatrixXd R, MatrixXd X, MatrixXd K, MatrixXd Phi, VectorXd Z);
@@ -130,11 +138,10 @@ void mav_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
     mav_pos(0) = msg->pose.position.x;
     mav_pos(1) = msg->pose.position.y;
     mav_pos(2) = msg->pose.position.z;
-    double q0 = msg->pose.orientation.w;
-    double q1 = msg->pose.orientation.x;
-    double q2 = msg->pose.orientation.y;
-    double q3 = msg->pose.orientation.z;
-    mav_yaw = std::atan2(2*(q0*q3 + q1*q2), 1-2*(q2*q2 + q3*q3));
+    mav_quad = msg->pose.orientation;
+    tf::Quaternion RQ2;
+    tf::quaternionMsgToTF(mav_quad, RQ2);
+    tf::Matrix3x3(RQ2).getRPY(mav_roll, mav_pitch, mav_yaw);
     timestamp = msg->header.stamp;
 
     ROS_INFO_STREAM("timestamp: " << (timestamp - timestamp_begin).toSec());
@@ -171,6 +178,8 @@ void mav_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
       mav_pos_prev = mav_pos;
       mav_yaw_prev = mav_yaw;
       timestamp_prev = timestamp;
+      publishParticles();
+      publishTargetMarkers();
     }
 }
 
@@ -315,6 +324,50 @@ void ekf_state_cb(const std_msgs::UInt64::ConstPtr &msg)
     }
 }
 
+void publishParticles()
+{
+    geometry_msgs::PoseArray pa;
+    pa.header.stamp = ros::Time::now();
+    pa.header.frame_id = "map";
+    for (size_t i = 0; i < n; i++)
+    {
+        geometry_msgs::Pose pm;
+        pm.position.x = 0;
+        pm.position.y = 0;
+        pm.position.z = 0;
+        pm.orientation = tf::createQuaternionMsgFromRollPitchYaw(mav_roll, mav_pitch, p[i].orient);
+
+        pa.poses.push_back(pm);
+    }
+    pub_particle.publish(pa);
+}
+
+void publishTargetMarkers()
+{
+    visualization_msgs::MarkerArray markers;//定义MarkerArray对象
+	for(int i = 0; i < n; i++)
+	{
+		visualization_msgs::Marker marker;
+        marker.header.frame_id = "map";
+        marker.header.stamp = ros::Time::now();
+		marker.type = visualization_msgs::Marker::SPHERE;
+		marker.ns = "Target points";
+		marker.id =i; //用来标记同一帧不同的对象，如果后面的帧的对象少于前面帧的对象，那么少的id将在rviz中残留，所以需要后续的实时更新程序
+        marker.pose.position.x = -p[i].x;
+        marker.pose.position.y = -p[i].y;
+        marker.pose.position.z = -p[i].z;
+		marker.pose.orientation.w = 1.0;
+        marker.scale.x = marker.scale.y = marker.scale.z = 0.2;
+		marker.color.a = 1.0;
+		marker.color.r = 1.0;
+		marker.color.g = 0.0;
+		marker.color.b = 1.0;
+        marker.lifetime = ros::Duration(0.2);
+        markers.markers.push_back(marker);
+	}
+    pub_target_marker.publish(markers);
+}
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "mcl_node");
@@ -333,6 +386,8 @@ int main(int argc, char **argv)
     ros::Subscriber ekf_state_sub = nh.subscribe<std_msgs::UInt64>
                 ("ekf/state", 1, ekf_state_cb); //21hz
 
+    pub_particle = nh.advertise<geometry_msgs::PoseArray>("particles", 1, true);
+    pub_target_marker = nh.advertise<visualization_msgs::MarkerArray>("target_marker", 1, true);
     pub_img_pos = nh.advertise<std_msgs::Float32MultiArray>
                 ("tracker/pos_image_ekf", 10);
 
