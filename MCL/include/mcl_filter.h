@@ -53,10 +53,27 @@ public:
         y = init_y + gen_unit_random() * init_pos_conv; // robot's y coordinate
         z = init_z + gen_unit_random() * init_pos_conv; // robot's y coordinate
         orient = angle_diff(init_orient, gen_unit_random() * init_orient_conv); // robot's orientation
+    }
 
-        forward_noise = 0.0; //noise of the forward movement
-        turn_noise = 0.0; //noise of the turn
-        sense_noise = 0.0; //noise of the sensing
+    Robot(double init_x, double init_y, double init_z, double init_orient, double alpha_1, double alpha_2, double alpha_3, double alpha_4, double init_pos_conv, double init_orient_conv)
+    {
+        // Constructor
+        x = init_x + gen_unit_random() * init_pos_conv; // robot's x coordinate
+        y = init_y + gen_unit_random() * init_pos_conv; // robot's y coordinate
+        z = init_z + gen_unit_random() * init_pos_conv; // robot's y coordinate
+        orient = angle_diff(init_orient, gen_unit_random() * init_orient_conv); // robot's orientation
+
+        set_params(alpha_1, alpha_2, alpha_3, alpha_4, init_pos_conv, init_orient_conv);
+    }
+
+    void set_params(double alpha_1, double alpha_2, double alpha_3, double alpha_4, double init_pos_conv, double init_orient_conv)
+    {
+        this->alpha_1 = alpha_1;
+        this->alpha_2 = alpha_2;
+        this->alpha_3 = alpha_3;
+        this->alpha_4 = alpha_4;
+        this->init_pos_conv = init_pos_conv;
+        this->init_orient_conv = init_orient_conv;
     }
 
     void set(double new_x, double new_y, double new_orient)
@@ -186,11 +203,11 @@ public:
     double forward_noise, turn_noise, sense_noise; //robot noises
     double delta_rot1, delta_rot2, delta_rot3, delta_trans;
     double delta_rot1_hat, delta_rot2_hat, delta_rot3_hat, delta_trans_hat;
-    double alpha_1 = 0.00;   // uncertainty weight
-    double alpha_2 = 0.00;
-    double alpha_3 = 0.5;
-    double alpha_4 = 0.00;
-    double init_pos_conv = 0.5;
+    double alpha_1 = 0.0;   // uncertainty weight
+    double alpha_2 = 0.0;
+    double alpha_3 = 0.0;
+    double alpha_4 = 0.0;
+    double init_pos_conv = 1.0;
     double init_orient_conv = 0.1;
 
 private:

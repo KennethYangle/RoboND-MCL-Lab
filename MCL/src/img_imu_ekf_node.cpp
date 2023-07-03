@@ -86,11 +86,16 @@ Vector3d ACC[50];
 MatrixXd PP[50]; //有Img后，第一次使用的P
 MatrixXd KK;
 // MatrixXd GG;
-
+double alpha_1 = 0.0;   // uncertainty weight
+double alpha_2 = 0.0;
+double alpha_3 = 0.0;
+double alpha_4 = 0.0;
+double init_pos_conv = 1.0;
+double init_orient_conv = 0.1;
 
 // Create a set of particles
-const int n = 100;
-Robot p[n];
+int particle_num = 1000;
+vector<Robot> p;
 
 ros::Publisher pub_img_pos, pub_particle, pub_target_marker;
 
@@ -144,8 +149,8 @@ void mav_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
     tf::Matrix3x3(RQ2).getRPY(mav_roll, mav_pitch, mav_yaw);
     timestamp = msg->header.stamp;
 
-    ROS_INFO_STREAM("timestamp: " << (timestamp - timestamp_begin).toSec());
-    ROS_INFO_STREAM("mav_pos: " << mav_pos);
+    ROS_DEBUG_STREAM("timestamp: " << (timestamp - timestamp_begin).toSec());
+    ROS_DEBUG_STREAM("mav_pos: " << mav_pos);
     if (!get_pose)
     {
       mav_pos_prev = mav_pos;
@@ -153,8 +158,10 @@ void mav_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
       timestamp_prev = timestamp;
       timestamp_begin = timestamp;
 
-      for (int i = 0; i < n; i++) {
-        p[i] = Robot(mav_pos(0)-target_pos(0), mav_pos(1)-target_pos(1), mav_pos(2)-target_pos(2), mav_yaw);
+      p.clear();
+      for (int i = 0; i < particle_num; i++) {
+        p.push_back( Robot(mav_pos(0)-target_pos(0), mav_pos(1)-target_pos(1), mav_pos(2)-target_pos(2), mav_yaw, 
+                           alpha_1, alpha_2, alpha_3, alpha_4, init_pos_conv, init_orient_conv) );
         ROS_DEBUG_STREAM("particle[" << i << "]_init_pos: " << p[i].x << ", " << p[i].y << ", " << p[i].z);
       }
       get_pose = true;
@@ -170,7 +177,7 @@ void mav_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
     else if (dt > 0.02)
     {
       // Simulate a robot motion for each of these particles
-      for (int i = 0; i < n; i++) {
+      for (int i = 0; i < particle_num; i++) {
         p[i].set_odoms(mav_pos, mav_pos_prev, mav_yaw, mav_yaw_prev, dt);
         p[i].sample_motion_model_simple();
         ROS_DEBUG_STREAM("particle[" << i << "]_pos: " << p[i].x << ", " << p[i].y << ", " << p[i].z);
@@ -329,7 +336,7 @@ void publishParticles()
     geometry_msgs::PoseArray pa;
     pa.header.stamp = ros::Time::now();
     pa.header.frame_id = "map";
-    for (size_t i = 0; i < n; i++)
+    for (size_t i = 0; i < particle_num; i++)
     {
         geometry_msgs::Pose pm;
         pm.position.x = 0;
@@ -345,7 +352,7 @@ void publishParticles()
 void publishTargetMarkers()
 {
     visualization_msgs::MarkerArray markers;//定义MarkerArray对象
-	for(int i = 0; i < n; i++)
+	for(int i = 0; i < particle_num; i++)
 	{
 		visualization_msgs::Marker marker;
         marker.header.frame_id = "map";
@@ -390,6 +397,18 @@ int main(int argc, char **argv)
     pub_target_marker = nh.advertise<visualization_msgs::MarkerArray>("target_marker", 1, true);
     pub_img_pos = nh.advertise<std_msgs::Float32MultiArray>
                 ("tracker/pos_image_ekf", 10);
+
+    nh.param<int>("particle_num", particle_num, 100);
+    ROS_INFO_STREAM_ONCE("particle_num: " << particle_num);
+    nh.param<double>("alpha_1", alpha_1, 0.0);
+    nh.param<double>("alpha_2", alpha_2, 0.0);
+    nh.param<double>("alpha_3", alpha_3, 0.0);
+    nh.param<double>("alpha_4", alpha_4, 0.0);
+    ROS_INFO_STREAM_ONCE("alpha_1: " << alpha_1 << ", alpha_2: " << alpha_2 << ", alpha_3: " << alpha_3 << ", alpha_4: " << alpha_4);
+    nh.param<double>("init_pos_conv", init_pos_conv, 1.0);
+    nh.param<double>("init_orient_conv", init_orient_conv, 0.1);
+    ROS_INFO_STREAM_ONCE("init_pos_conv: " << init_pos_conv << ", init_orient_conv: " << init_orient_conv);
+
 
     // ros::spin();
     ros::AsyncSpinner spinner(4);
