@@ -59,7 +59,7 @@ int img_f = 370;
 Vector3d mav_vel;
 Vector3d mav_pos;
 Vector3d mav_pos_prev;
-Vector3d target_pos(8, -35, 12);
+Vector3d target_pos;
 geometry_msgs::Quaternion mav_quad;
 Vector4d mav_q;
 Vector4d mav_qq;
@@ -306,6 +306,8 @@ void mav_img_cb(const std_msgs::Float32MultiArray::ConstPtr &msg)
     mav_img(0) = (msg->data[0] - img0(0)) / img_f;
     mav_img(1) = (msg->data[1] - img0(1)) / img_f;
     get_img = true;
+
+    
 }
 
 void img_show_cb(const sensor_msgs::CompressedImage::ConstPtr &msg)
@@ -398,17 +400,20 @@ int main(int argc, char **argv)
     pub_img_pos = nh.advertise<std_msgs::Float32MultiArray>
                 ("tracker/pos_image_ekf", 10);
 
-    nh.param<int>("particle_num", particle_num, 100);
+    nh.param<int>("/particle_num", particle_num, 100);
     ROS_INFO_STREAM_ONCE("particle_num: " << particle_num);
-    nh.param<double>("alpha_1", alpha_1, 0.0);
-    nh.param<double>("alpha_2", alpha_2, 0.0);
-    nh.param<double>("alpha_3", alpha_3, 0.0);
-    nh.param<double>("alpha_4", alpha_4, 0.0);
+    nh.param<double>("/MCL_params/alpha_1", alpha_1, 0.0);
+    nh.param<double>("/MCL_params/alpha_2", alpha_2, 0.0);
+    nh.param<double>("/MCL_params/alpha_3", alpha_3, 0.0);
+    nh.param<double>("/MCL_params/alpha_4", alpha_4, 0.0);
     ROS_INFO_STREAM_ONCE("alpha_1: " << alpha_1 << ", alpha_2: " << alpha_2 << ", alpha_3: " << alpha_3 << ", alpha_4: " << alpha_4);
-    nh.param<double>("init_pos_conv", init_pos_conv, 1.0);
-    nh.param<double>("init_orient_conv", init_orient_conv, 0.1);
+    nh.param<double>("/MCL_params/init_pos_conv", init_pos_conv, 1.0);
+    nh.param<double>("/MCL_params/init_orient_conv", init_orient_conv, 0.1);
     ROS_INFO_STREAM_ONCE("init_pos_conv: " << init_pos_conv << ", init_orient_conv: " << init_orient_conv);
-
+    nh.param<double>("/target_pos/target_x", target_pos(0), 0.0);
+    nh.param<double>("/target_pos/target_y", target_pos(1), 0.0);
+    nh.param<double>("/target_pos/target_z", target_pos(2), 0.0);
+    ROS_INFO_STREAM_ONCE("target_pos: " << target_pos);
 
     // ros::spin();
     ros::AsyncSpinner spinner(4);

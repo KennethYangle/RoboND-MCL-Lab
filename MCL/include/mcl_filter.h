@@ -140,6 +140,15 @@ public:
         orient = orient + delta_rot1_hat + delta_rot2_hat;
     }
 
+    void landmark_model_likelyhood_simple(Vector3d ps)
+    {
+        Vector3d p(x, y, z);
+        p.normalize();
+        Vector3d ps_hat = p;
+        
+        ROS_INFO_STREAM("ps_hat: " << ps_hat << ", ps: " << ps);
+    }
+
     Robot move(double turn, double forward)
     {
         if (forward < 0)
