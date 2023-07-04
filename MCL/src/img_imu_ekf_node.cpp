@@ -97,6 +97,7 @@ double alpha_3 = 0.0;
 double alpha_4 = 0.0;
 double init_pos_conv = 1.0;
 double init_orient_conv = 0.1;
+double sigma_p = 1.0;
 
 // Create a set of particles
 int particle_num = 1000;
@@ -169,7 +170,7 @@ void mav_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
       p.clear();
       for (int i = 0; i < particle_num; i++) {
         p.push_back( Robot(mav_pos(0)-target_pos(0), mav_pos(1)-target_pos(1), mav_pos(2)-target_pos(2), mav_yaw, 
-                           alpha_1, alpha_2, alpha_3, alpha_4, init_pos_conv, init_orient_conv) );
+                           alpha_1, alpha_2, alpha_3, alpha_4, init_pos_conv, init_orient_conv, sigma_p) );
         ROS_DEBUG_STREAM("particle[" << i << "]_init_pos: " << p[i].x << ", " << p[i].y << ", " << p[i].z);
       }
       get_pose = true;
@@ -410,7 +411,7 @@ void publishSphereMarkers(Vector3d p_s)
         marker.pose.position.y = p[i].p_s_hat(1);
         marker.pose.position.z = p[i].p_s_hat(2);
 		marker.pose.orientation.w = 1.0;
-        marker.scale.x = marker.scale.y = marker.scale.z = 0.2;
+        marker.scale.x = marker.scale.y = marker.scale.z = max(p[i].q/2, 0.1);
 		marker.color.a = 1.0;
 		marker.color.r = 0.0;
 		marker.color.g = 1.0;
@@ -475,7 +476,8 @@ int main(int argc, char **argv)
     ROS_INFO_STREAM_ONCE("alpha_1: " << alpha_1 << ", alpha_2: " << alpha_2 << ", alpha_3: " << alpha_3 << ", alpha_4: " << alpha_4);
     nh.param<double>("/MCL_params/init_pos_conv", init_pos_conv, 1.0);
     nh.param<double>("/MCL_params/init_orient_conv", init_orient_conv, 0.1);
-    ROS_INFO_STREAM_ONCE("init_pos_conv: " << init_pos_conv << ", init_orient_conv: " << init_orient_conv);
+    nh.param<double>("/MCL_params/sigma_p", sigma_p, 1.0);
+    ROS_INFO_STREAM_ONCE("init_pos_conv: " << init_pos_conv << ", init_orient_conv: " << init_orient_conv << ", sigma_p: " << sigma_p);
     nh.param<double>("/target_pos/target_x", target_pos(0), 0.0);
     nh.param<double>("/target_pos/target_y", target_pos(1), 0.0);
     nh.param<double>("/target_pos/target_z", target_pos(2), 0.0);

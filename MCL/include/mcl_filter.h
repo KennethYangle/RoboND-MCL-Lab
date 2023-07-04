@@ -55,7 +55,7 @@ public:
         orient = angle_diff(init_orient, gen_unit_random() * init_orient_conv); // robot's orientation
     }
 
-    Robot(double init_x, double init_y, double init_z, double init_orient, double alpha_1, double alpha_2, double alpha_3, double alpha_4, double init_pos_conv, double init_orient_conv)
+    Robot(double init_x, double init_y, double init_z, double init_orient, double alpha_1, double alpha_2, double alpha_3, double alpha_4, double init_pos_conv, double init_orient_conv, double sigma_p)
     {
         // Constructor
         x = init_x + gen_unit_random() * init_pos_conv; // robot's x coordinate
@@ -63,10 +63,10 @@ public:
         z = init_z + gen_unit_random() * init_pos_conv; // robot's y coordinate
         orient = angle_diff(init_orient, gen_unit_random() * init_orient_conv); // robot's orientation
 
-        set_params(alpha_1, alpha_2, alpha_3, alpha_4, init_pos_conv, init_orient_conv);
+        set_params(alpha_1, alpha_2, alpha_3, alpha_4, init_pos_conv, init_orient_conv, sigma_p);
     }
 
-    void set_params(double alpha_1, double alpha_2, double alpha_3, double alpha_4, double init_pos_conv, double init_orient_conv)
+    void set_params(double alpha_1, double alpha_2, double alpha_3, double alpha_4, double init_pos_conv, double init_orient_conv, double sigma_p)
     {
         this->alpha_1 = alpha_1;
         this->alpha_2 = alpha_2;
@@ -74,6 +74,7 @@ public:
         this->alpha_4 = alpha_4;
         this->init_pos_conv = init_pos_conv;
         this->init_orient_conv = init_orient_conv;
+        this->sigma_p = sigma_p;
     }
 
     void set(double new_x, double new_y, double new_orient)
@@ -146,7 +147,10 @@ public:
         p.normalize();
         p_s_hat = p;
 
+        q = gaussian(0, sigma_p, 1.0 - p_s_hat.dot(p_s));
+
         // ROS_INFO_STREAM("p_s_hat: " << p_s_hat << ", p_s: " << p_s);
+        // ROS_INFO_STREAM("q: " << q);
     }
 
     Robot move(double turn, double forward)
@@ -219,6 +223,8 @@ public:
     double init_pos_conv = 1.0;
     double init_orient_conv = 0.1;
     Vector3d p_s_hat;
+    double q;
+    double sigma_p = 0.5;
 
 private:
     double gen_gauss_random(double mean, double variance)
