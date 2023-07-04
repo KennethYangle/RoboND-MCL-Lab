@@ -5,6 +5,7 @@
 #include <tf/tf.h>
 
 #include <Eigen/Geometry>
+#include <eigen_conversions/eigen_msg.h>
 #include <deque>
 
 #include "img_imu_ekf.h"
@@ -54,8 +55,9 @@ Vector3d acc;
 Vector3d gyro;
 Vector2d mav_img_pre;
 Vector2d mav_img;
-Vector2d img0(640, 360);//图像分别率
-int img_f = 370;
+Vector2d img0(640, 360);//图像中心
+double img_f = 370;
+double img_width, img_height;
 Vector3d mav_vel;
 Vector3d mav_pos;
 Vector3d mav_pos_prev;
@@ -67,6 +69,9 @@ double mav_yaw;
 double mav_yaw_prev;
 double mav_roll;
 double mav_pitch;
+Eigen::Matrix3d mav_R;
+Eigen::Quaterniond mav_quad_eigen;
+Eigen::Matrix3d R_cb;
 ros::Time timestamp_begin;
 ros::Time timestamp;
 ros::Time timestamp_prev;
@@ -97,10 +102,11 @@ double init_orient_conv = 0.1;
 int particle_num = 1000;
 vector<Robot> p;
 
-ros::Publisher pub_img_pos, pub_particle, pub_target_marker;
+ros::Publisher pub_img_pos, pub_particle, pub_target_marker, pub_sphere_marker;
 
 void publishParticles();
 void publishTargetMarkers();
+void publishSphereMarkers(Vector3d p_s);
 
 //predict(MatrixXd Phi, MatrixXd X, MatrixXd P, MatrixXd G, MatrixXd Q)
 //void update(MatrixXd P, MatrixXd H, MatrixXd R, MatrixXd X, MatrixXd K, MatrixXd Phi, VectorXd Z);
@@ -147,6 +153,8 @@ void mav_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
     tf::Quaternion RQ2;
     tf::quaternionMsgToTF(mav_quad, RQ2);
     tf::Matrix3x3(RQ2).getRPY(mav_roll, mav_pitch, mav_yaw);
+    tf::quaternionMsgToEigen(mav_quad, mav_quad_eigen);
+    mav_R = mav_quad_eigen.toRotationMatrix();
     timestamp = msg->header.stamp;
 
     ROS_DEBUG_STREAM("timestamp: " << (timestamp - timestamp_begin).toSec());
@@ -297,17 +305,26 @@ void mav_imu_cb(const sensor_msgs::Imu::ConstPtr &msg)
 
 void mav_img_cb(const std_msgs::Float32MultiArray::ConstPtr &msg)
 {
+    if (!get_pose) return;
+
     mav_img_pre = mav_img;
-    if (msg->data[0] < 0)
-    {
-        return;
-    }
     is_img_come = true;
-    mav_img(0) = (msg->data[0] - img0(0)) / img_f;
-    mav_img(1) = (msg->data[1] - img0(1)) / img_f;
     get_img = true;
 
-    
+    Vector3d p_s_c(msg->data[0] - img0(0), msg->data[1] - img0(1), img_f);
+    if (msg->data[0] < 0) {
+        p_s_c = Vector3d(0., 0., 0.);
+    }
+    else {
+        p_s_c.normalize();
+    }
+    Vector3d p_s = mav_R * R_cb * p_s_c;
+
+    for (int i = 0; i < p.size(); i++) {
+        p[i].landmark_model_likelyhood_simple(p_s);
+    }
+
+    publishSphereMarkers(p_s);
 }
 
 void img_show_cb(const sensor_msgs::CompressedImage::ConstPtr &msg)
@@ -361,7 +378,7 @@ void publishTargetMarkers()
         marker.header.stamp = ros::Time::now();
 		marker.type = visualization_msgs::Marker::SPHERE;
 		marker.ns = "Target points";
-		marker.id =i; //用来标记同一帧不同的对象，如果后面的帧的对象少于前面帧的对象，那么少的id将在rviz中残留，所以需要后续的实时更新程序
+		marker.id = i; //用来标记同一帧不同的对象，如果后面的帧的对象少于前面帧的对象，那么少的id将在rviz中残留，所以需要后续的实时更新程序
         marker.pose.position.x = -p[i].x;
         marker.pose.position.y = -p[i].y;
         marker.pose.position.z = -p[i].z;
@@ -376,6 +393,54 @@ void publishTargetMarkers()
 	}
     pub_target_marker.publish(markers);
 }
+
+void publishSphereMarkers(Vector3d p_s)
+{
+    visualization_msgs::MarkerArray markers;//定义MarkerArray对象
+    // p_s_hat
+	for(int i = 0; i < particle_num; i++)
+	{
+		visualization_msgs::Marker marker;
+        marker.header.frame_id = "map";
+        marker.header.stamp = ros::Time::now();
+		marker.type = visualization_msgs::Marker::SPHERE;
+		marker.ns = "Sphere estimate points";
+		marker.id = i;
+        marker.pose.position.x = p[i].p_s_hat(0);
+        marker.pose.position.y = p[i].p_s_hat(1);
+        marker.pose.position.z = p[i].p_s_hat(2);
+		marker.pose.orientation.w = 1.0;
+        marker.scale.x = marker.scale.y = marker.scale.z = 0.2;
+		marker.color.a = 1.0;
+		marker.color.r = 0.0;
+		marker.color.g = 1.0;
+		marker.color.b = 0.0;
+        marker.lifetime = ros::Duration(0.2);
+        markers.markers.push_back(marker);
+	}
+
+    // p_s
+    visualization_msgs::Marker marker;
+    marker.header.frame_id = "map";
+    marker.header.stamp = ros::Time::now();
+    marker.type = visualization_msgs::Marker::SPHERE;
+    marker.ns = "Sphere points";
+    marker.id = particle_num;
+    marker.pose.position.x = p_s(0);
+    marker.pose.position.y = p_s(1);
+    marker.pose.position.z = p_s(2);
+    marker.pose.orientation.w = 1.0;
+    marker.scale.x = marker.scale.y = marker.scale.z = 0.2;
+    marker.color.a = 1.0;
+    marker.color.r = 1.0;
+    marker.color.g = 0.0;
+    marker.color.b = 0.0;
+    marker.lifetime = ros::Duration(0.2);
+    markers.markers.push_back(marker);
+
+    pub_sphere_marker.publish(markers);
+}
+
 
 int main(int argc, char **argv)
 {
@@ -397,6 +462,7 @@ int main(int argc, char **argv)
 
     pub_particle = nh.advertise<geometry_msgs::PoseArray>("particles", 1, true);
     pub_target_marker = nh.advertise<visualization_msgs::MarkerArray>("target_marker", 1, true);
+    pub_sphere_marker = nh.advertise<visualization_msgs::MarkerArray>("sphere_marker", 1, true);
     pub_img_pos = nh.advertise<std_msgs::Float32MultiArray>
                 ("tracker/pos_image_ekf", 10);
 
@@ -414,6 +480,13 @@ int main(int argc, char **argv)
     nh.param<double>("/target_pos/target_y", target_pos(1), 0.0);
     nh.param<double>("/target_pos/target_z", target_pos(2), 0.0);
     ROS_INFO_STREAM_ONCE("target_pos: " << target_pos);
+    nh.param<double>("/camera/img_width", img_width, 0.0);
+    nh.param<double>("/camera/img_height", img_height, 0.0);
+    img0 = Vector2d(img_width/2, img_height/2);
+    nh.param<double>("/camera/img_f", img_f, 0.0);
+    ROS_INFO_STREAM_ONCE("img_width: " << img_width << ", img_height: " << img_height << ", img_f: " << img_f);
+    R_cb << 0, 0, 1, -1, 0, 0, 0, -1, 0;
+
 
     // ros::spin();
     ros::AsyncSpinner spinner(4);

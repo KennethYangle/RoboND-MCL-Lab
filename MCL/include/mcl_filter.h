@@ -140,13 +140,13 @@ public:
         orient = orient + delta_rot1_hat + delta_rot2_hat;
     }
 
-    void landmark_model_likelyhood_simple(Vector3d ps)
+    void landmark_model_likelyhood_simple(Vector3d p_s)
     {
-        Vector3d p(x, y, z);
+        Vector3d p(-x, -y, -z);
         p.normalize();
-        Vector3d ps_hat = p;
-        
-        ROS_INFO_STREAM("ps_hat: " << ps_hat << ", ps: " << ps);
+        p_s_hat = p;
+
+        // ROS_INFO_STREAM("p_s_hat: " << p_s_hat << ", p_s: " << p_s);
     }
 
     Robot move(double turn, double forward)
@@ -218,6 +218,7 @@ public:
     double alpha_4 = 0.0;
     double init_pos_conv = 1.0;
     double init_orient_conv = 0.1;
+    Vector3d p_s_hat;
 
 private:
     double gen_gauss_random(double mean, double variance)

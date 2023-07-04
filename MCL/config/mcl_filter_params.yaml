@@ -12,3 +12,8 @@ target_pos:
   target_x: 8.0
   target_y: -35.0
   target_z: 12.0
+
+camera:
+  img_width: 720
+  img_height: 1280
+  img_f: 370

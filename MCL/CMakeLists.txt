@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   cv_bridge
   image_transport
+  eigen_conversions
 )
 find_package(Eigen3)
 find_package(OpenCV REQUIRED)
