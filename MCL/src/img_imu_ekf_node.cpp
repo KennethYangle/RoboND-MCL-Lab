@@ -105,6 +105,7 @@ vector<Robot> p;
 
 ros::Publisher pub_img_pos, pub_particle, pub_target_marker, pub_sphere_marker;
 
+void resampling_particles();
 void publishParticles();
 void publishTargetMarkers();
 void publishSphereMarkers(Vector3d p_s);
@@ -194,6 +195,8 @@ void mav_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
       mav_pos_prev = mav_pos;
       mav_yaw_prev = mav_yaw;
       timestamp_prev = timestamp;
+
+      // Visualization
       publishParticles();
       publishTargetMarkers();
     }
@@ -312,6 +315,7 @@ void mav_img_cb(const std_msgs::Float32MultiArray::ConstPtr &msg)
     is_img_come = true;
     get_img = true;
 
+    // Measurement
     Vector3d p_s_c(msg->data[0] - img0(0), msg->data[1] - img0(1), img_f);
     if (msg->data[0] < 0) {
         p_s_c = Vector3d(0., 0., 0.);
@@ -321,10 +325,15 @@ void mav_img_cb(const std_msgs::Float32MultiArray::ConstPtr &msg)
     }
     Vector3d p_s = mav_R * R_cb * p_s_c;
 
+    //Generate particle weights depending on robot's measurement
     for (int i = 0; i < p.size(); i++) {
         p[i].landmark_model_likelyhood_simple(p_s);
     }
 
+    //Resample the particles with a sample probability proportional to the importance weight
+    resampling_particles();
+
+    // Visualization
     publishSphereMarkers(p_s);
 }
 
@@ -351,6 +360,30 @@ void ekf_state_cb(const std_msgs::UInt64::ConstPtr &msg)
     }
 }
 
+void resampling_particles()
+{
+    vector<Robot> p2;
+    int index = gen_real_random() * particle_num;
+    double beta = 0.0;
+    double mq = 0;
+    for (int i = 0; i < particle_num; i++) {
+        if (mq < p[i].q) {
+            mq = p[i].q;
+        }
+    }
+
+    for (int i = 0; i < particle_num; i++) {
+        beta += gen_real_random() * 2.0 * mq;
+        while (beta > p[index].q) {
+            beta -= p[index].q;
+            index = mod((index + 1), particle_num);
+        }
+        p2.push_back(p[index]);
+    }
+    p.assign(p2.begin(), p2.end());
+}
+
+// Draw arrows
 void publishParticles()
 {
     geometry_msgs::PoseArray pa;
@@ -369,6 +402,7 @@ void publishParticles()
     pub_particle.publish(pa);
 }
 
+// Draw target particles
 void publishTargetMarkers()
 {
     visualization_msgs::MarkerArray markers;//定义MarkerArray对象
@@ -395,6 +429,7 @@ void publishTargetMarkers()
     pub_target_marker.publish(markers);
 }
 
+// Draw target particles on sphere
 void publishSphereMarkers(Vector3d p_s)
 {
     visualization_msgs::MarkerArray markers;//定义MarkerArray对象
@@ -438,6 +473,42 @@ void publishSphereMarkers(Vector3d p_s)
     marker.color.b = 0.0;
     marker.lifetime = ros::Duration(0.2);
     markers.markers.push_back(marker);
+
+    // Barycente
+    visualization_msgs::Marker marker_arrow;
+    marker_arrow.header.frame_id = "map";
+    marker_arrow.header.stamp = ros::Time::now();
+    marker_arrow.type = visualization_msgs::Marker::ARROW;
+    marker_arrow.ns = "Barycente arrow";
+    marker_arrow.id = particle_num + 1;
+    marker_arrow.scale.x = 0.1;
+    marker_arrow.scale.y = 0.16;
+    marker_arrow.scale.z = 0.2;
+    marker_arrow.color.a = 1.0;
+    marker_arrow.color.r = 0.3;
+    marker_arrow.color.g = 1.0;
+    marker_arrow.color.b = 0.3;
+
+    geometry_msgs::Point pt1, pt2;
+    pt1.x = 0.;   // start point
+    pt1.y = 0.;
+    pt1.z = 0.;
+    // end point
+	for(int i = 0; i < particle_num; i++)
+    {
+        pt2.x += p[i].p_s_hat(0) * p[i].q;
+        pt2.y += p[i].p_s_hat(1) * p[i].q;
+        pt2.z += p[i].p_s_hat(2) * p[i].q;
+    }
+    double pt2_norm = sqrt(pt2.x*pt2.x + pt2.y*pt2.y + pt2.z*pt2.z);
+    pt2.x = pt2.x / pt2_norm * 1.5;
+    pt2.y = pt2.y / pt2_norm * 1.5;
+    pt2.z = pt2.z / pt2_norm * 1.5;
+
+    marker_arrow.points.push_back(pt1);
+    marker_arrow.points.push_back(pt2);
+    marker_arrow.lifetime = ros::Duration(0.2);
+    markers.markers.push_back(marker_arrow);
 
     pub_sphere_marker.publish(markers);
 }
