@@ -68,6 +68,7 @@ ros::Time timestamp_prev;
 bool get_img = false;
 bool get_pose = false;
 bool get_vel = false;
+bool is_show_image = false;
 
 double alpha_1 = 0.0;   // uncertainty weight
 double alpha_2 = 0.0;
@@ -82,6 +83,7 @@ int particle_num = 1000;
 vector<Robot> p;
 
 cv::Mat imgCallback;
+ros::Subscriber img_show_sub;
 ros::Publisher pub_img_pos, pub_particle, pub_target_marker, pub_sphere_marker;
 
 void resampling_particles();
@@ -187,7 +189,7 @@ void img_show_cb(const sensor_msgs::CompressedImage::ConstPtr &msg)
     cv_bridge::CvImagePtr cv_ptr_compressed = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
     imgCallback = cv_ptr_compressed->image;
 
-    cv::imshow("imgCallback", imgCallback);
+    cv::imshow("FPV", imgCallback);
     cv::waitKey(1);
 }
 
@@ -350,6 +352,7 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "mcl_node");
     ros::NodeHandle nh;
+    nh.param<bool>("/Debug/is_show_image", is_show_image, false);
 
     ros::Subscriber pos_sub = nh.subscribe<geometry_msgs::PoseStamped>
                 ("mavros/local_position/pose", 10, mav_pose_cb);   //50hz
@@ -357,7 +360,8 @@ int main(int argc, char **argv)
                 ("mavros/local_position/velocity_local", 10, mav_vel_cb);//50hz
     ros::Subscriber img_sub = nh.subscribe<std_msgs::Float32MultiArray>
                 ("tracker/pos_image", 10, mav_img_cb);          //23hz
-    ros::Subscriber img_show_sub = nh.subscribe<sensor_msgs::CompressedImage>
+    if (is_show_image)
+        img_show_sub = nh.subscribe<sensor_msgs::CompressedImage>
                 ("/image_raw/compressed", 10, img_show_cb); //21hz
 
     pub_particle = nh.advertise<geometry_msgs::PoseArray>("particles", 1, true);

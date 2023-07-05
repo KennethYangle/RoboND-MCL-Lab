@@ -1,7 +1,7 @@
 <launch>
   <env name="ROSCONSOLE_CONFIG_FILE" value="$(find MCL)/config/rosconsole.config"/>
-  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find MCL)/config/mcl.rviz" />
   <rosparam file="$(find MCL)/config/mcl_filter_params.yaml" command="load" />
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find MCL)/config/mcl.rviz" />
   
   <node name="mcl_node" pkg="MCL" type="mcl_node" output="screen"/>
   <!-- <node name="mcl_node" pkg="MCL" type="mcl_node"/> -->
