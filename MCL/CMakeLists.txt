@@ -136,11 +136,9 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/pose_eskf.cpp
 # )
-add_library(MCL src/eskf.cpp src/img_imu_ekf.cpp)
-link_libraries(MCL)
+
+add_executable(mcl_example src/mcl_example.cpp)
+target_link_libraries(mcl_example ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(mcl_node src/mcl_filter.cpp)
 target_link_libraries(mcl_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
-
-add_executable(ekf_node src/img_imu_ekf_node.cpp)
-target_link_libraries(ekf_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
